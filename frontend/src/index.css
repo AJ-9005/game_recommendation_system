@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/* Global Base Layer */
+@layer base {
+  html, body {
+    width: 100%;
+    min-height: 100vh;
+    @apply bg-slate-950 text-slate-50 antialiased;
+  }
+
+  /* Fix for Vite #root container behavior */
+  #root {
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Smooth Focus Rings for Inputs */
+  input:focus {
+    @apply border-indigo-500 ring-2 ring-indigo-500/20 outline-none;
+  }
+}
+
+/* Custom Dark Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-slate-950;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-800 rounded-md;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-700;
+}
