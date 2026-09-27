@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi.security import OAuth2PasswordRequestForm
 from backend.models.user import User, UserResponse, TokenResponse, UserLogin
 from backend.connect import db
 from backend.utils.encrypter import encrypt_password, verify_password
@@ -28,11 +29,11 @@ async def createUser(user: User):
     return UserResponse(id = str(result.inserted_id), username = user.username, email = user.email)
 
 @auth_router.post("/login", response_model=TokenResponse)
-async def login(credentials: UserLogin):
-    user = await db.users.find_one({"email": credentials.email})
+async def login(formdata: OAuth2PasswordRequestForm = Depends()):
+    user = await db.users.find_one({"email": formdata.username})
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found!")
-    if not verify_password(credentials.password, user.password):
+    if not verify_password(formdata.password, user["password"]):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Credentials!")
-    token = encode_token({"userid": user["_id"]})
-    return TokenResponse(token)
+    token = encode_token({"userid": str(user["_id"])})
+    return TokenResponse(access_token=token)
