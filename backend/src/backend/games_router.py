@@ -4,12 +4,14 @@ from backend.connect import db
 from backend.utils.seed_games import genrewise_import
 from backend.utils.rawgapi import search_games_from_rawg
 from backend.dependencies import get_user
+from backend.ml.content import recommender
 
 games_router = APIRouter(prefix="/games", tags=["games"])
 
 @games_router.post("/seed", status_code=201)
 async def seed_games(games_per_genre: int = Query(30, ge=5, le=50), current_user: dict = Depends(get_user)):
     summary = await genrewise_import(games_per_genre)
+    await recommender.fit()
     return summary
 
 @games_router.get("/", response_model=List[dict])
