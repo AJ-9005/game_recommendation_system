@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from backend.connect import db
@@ -26,9 +26,15 @@ class ContentRecommender:
         self.rawg_id_to_index.clear()
 
         for idx, game in enumerate(self.games_list):
-            self.rawg_id_to_index[game["rawg_id"]] = idx
+            rawg_id = game.get("rawg_id")
+            if rawg_id is not None:
+                try:
+                    # Enforce integer key type in rawg_id_to_index
+                    self.rawg_id_to_index[int(rawg_id)] = idx
+                except (ValueError, TypeError):
+                    self.rawg_id_to_index[rawg_id] = idx
             
-            # Fallback to title/genres if feature_text is missing
+            # Fallback to title/genres/tags if feature_text is missing
             f_text = game.get("feature_text")
             if not f_text:
                 genres = " ".join(game.get("genres", []))
@@ -40,25 +46,51 @@ class ContentRecommender:
         # Build TF-IDF Matrix
         self.tfidf_matrix = self.vectorizer.fit_transform(corpus)
 
-    def recommend_similar_games(self, rawg_id: int, top_n: int = 10, exclude_ids: set[int] = None) -> List[Dict[str, Any]]:
+    def recommend_similar_games(self, rawg_id: Any, top_n: int = 10, exclude_ids: Optional[set] = None) -> List[Dict[str, Any]]:
         """
         Calculates cosine similarity for a target game and returns top_n matches.
         """
-        if self.tfidf_matrix is None or rawg_id not in self.rawg_id_to_index:
+        if self.tfidf_matrix is None or not self.rawg_id_to_index:
             return []
 
+        # Convert input rawg_id to integer lookup
+        try:
+            lookup_id = int(rawg_id)
+        except (ValueError, TypeError):
+            lookup_id = rawg_id
+
+        # Look up target index
+        target_idx = self.rawg_id_to_index.get(lookup_id)
+        
+        # Fallback check if it was stored as string
+        if target_idx is None:
+            target_idx = self.rawg_id_to_index.get(str(rawg_id))
+
+        if target_idx is None:
+            print(f"DEBUG: rawg_id {rawg_id} ({type(rawg_id)}) not found in rawg_id_to_index!")
+            return []
+
+        # Build safety exclusion set without mutating caller's set
+        exclude_set = set()
         if exclude_ids is not None:
-            exclude_ids = set()
+            for item in exclude_ids:
+                exclude_set.add(item)
+                try:
+                    exclude_set.add(int(item))
+                except (ValueError, TypeError):
+                    pass
+                exclude_set.add(str(item))
 
-        exclude_ids.add(rawg_id)
+        # Always exclude target game itself
+        exclude_set.add(lookup_id)
+        exclude_set.add(str(rawg_id))
 
-        target_idx = self.rawg_id_to_index[rawg_id]
         target_vector = self.tfidf_matrix[target_idx]
 
-        # Compute cosine similarity against all game vectors
+        # Compute cosine similarity
         similarity_scores = cosine_similarity(target_vector, self.tfidf_matrix).flatten()
 
-        # Get top indices (excluding the game itself)
+        # Sort indices by highest score
         related_indices = similarity_scores.argsort()[::-1]
         
         recommended_games = []
@@ -68,7 +100,9 @@ class ContentRecommender:
             
             game_doc = dict(self.games_list[idx])
 
-            if game_doc["rawg_id"] in exclude_ids:
+            # Check exclusion using both string and int checks
+            g_rawg_id = game_doc.get("rawg_id")
+            if g_rawg_id in exclude_set or str(g_rawg_id) in exclude_set:
                 continue
 
             game_doc["_id"] = str(game_doc["_id"])

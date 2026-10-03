@@ -1,47 +1,80 @@
 import { useState } from 'react';
-import axios from 'axios';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { fetchAPI } from '../services/helper';
 
-export default function Auth({ onLoginSuccess }) {
-  const [isLogin, setIsLogin] = useState(location?.state?.signup || false)
+export default function Auth({ setUser }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const [isLogin, setIsLogin] = useState(location?.state?.signup ? false : true);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const API_URL = 'http://localhost:8000';
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError('');
+  setLoading(true);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+  const endpoint = isLogin ? '/auth/login' : '/auth/signup';
 
-    const endpoint = isLogin ? '/login' : '/register';
-    const payload = isLogin 
-      ? { username, password } 
-      : { username, email, password };
+  try {
+    let bodyData;
+    let headers = {};
 
-    try {
-      const response = await axios.post(`${API_URL}${endpoint}`, payload);
+    if (isLogin) {
+      // Pass URLSearchParams converted to string
+      bodyData = new URLSearchParams({
+        username: username,
+        password: password,
+      }).toString();
       
-      if (isLogin) {
-        // Store JWT token on successful login
-        const token = response.data.access_token;
-        localStorage.setItem('token', token);
-        
-        // Pass user state up to parent app component
-        if (onLoginSuccess) onLoginSuccess(token);
-      } else {
-        // If registration was successful, automatically switch to login view
-        setIsLogin(true);
-        setError('Account created successfully! Please sign in.');
-      }
-    } catch (err) {
-      setError(err.response?.data?.detail || 'An unexpected error occurred.');
-    } finally {
-      setLoading(false);
+      headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    } else {
+      bodyData = JSON.stringify({
+        username: username,
+        email: email,
+        password: password,
+      }).toString();
+      headers['Content-Type'] = 'application/json';
     }
-  };
+
+    const data = await fetchAPI(endpoint, {
+      method: 'POST',
+      headers,
+      body: bodyData,
+    });
+
+    if (isLogin) {
+      const token = data.access_token;
+      if (token) {
+        const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toUTCString();
+        document.cookie = `token=${token}; path=/; expires=${expires}; SameSite=Lax`;
+      }
+      navigate('/dashboard');
+      localStorage.setItem('user', JSON.stringify({email: data.email, library: data.library}))
+    } else {
+      setIsLogin(true);
+      setError('Account created successfully! Please sign in.');
+    }
+  } catch (err) {
+    let message = 'An unexpected error occurred.';
+    if (typeof err === 'string') {
+      message = err;
+    } else if (err?.detail) {
+      message = Array.isArray(err.detail)
+        ? err.detail.map((d) => d.msg).join(', ')
+        : err.detail;
+    } else if (err?.message) {
+      message = typeof err.message === 'object' ? JSON.stringify(err.message) : err.message;
+    }
+    setError(message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const isSuccessMessage = error.includes('successfully');
 
@@ -64,7 +97,7 @@ export default function Auth({ onLoginSuccess }) {
         {/* Error / Success Alert */}
         {error && (
           <div 
-            className={`p-3 rounded-lg text-sm mb-6 border transition-all ${
+            className={`p-3 rounded-lg text-sm mb-6 border transition-all break-words ${
               isSuccessMessage 
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
                 : 'bg-rose-500/10 border-rose-500/30 text-rose-400'

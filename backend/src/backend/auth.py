@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from backend.models.user import User, UserResponse, TokenResponse, UserLogin
 from backend.connect import db
@@ -36,4 +36,15 @@ async def login(formdata: OAuth2PasswordRequestForm = Depends()):
     if not verify_password(formdata.password, user["password"]):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Credentials!")
     token = encode_token({"userid": str(user["_id"])})
-    return TokenResponse(access_token=token)
+    return TokenResponse(access_token=token, email=user["email"], library=user["library"])
+
+@auth_router.post("/logout")
+async def logout(response: Response):
+    # Instructs the browser's set-cookie header to clear the token
+    response.delete_cookie(
+        key="token",
+        path="/",
+        httponly=True,
+        samesite="lax"
+    )
+    return {"message": "Logged out successfully"}

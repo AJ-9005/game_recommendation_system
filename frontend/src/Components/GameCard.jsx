@@ -4,12 +4,12 @@ export default function GameCard({ game }) {
   const navigate = useNavigate()
   return (
     <div
-      onClick={() => navigate("/gameinfo")}
+      onClick={() => navigate("/gameinfo", {state: {"game": game}})}
       className="group relative bg-slate-900 border border-slate-800 hover:border-indigo-500 rounded-xl overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 shadow-md hover:shadow-indigo-500/10 flex flex-col"
     >
       {/* Cover Poster */}
       <div className="w-full h-40 overflow-hidden bg-slate-950">
-        <img src={game.image} alt={game.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        <img src={game.background_image} alt={game.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
       </div>
 
       {/* Metadata */}
